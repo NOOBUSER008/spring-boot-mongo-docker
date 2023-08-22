@@ -149,15 +149,9 @@ spec:
          - containerPort: 27017
          env:
          - name: MONGO_INITDB_ROOT_USERNAME
-           valueFrom:
-             configMapKeyRef:
-               name: springappconfigmap
-               key: username
+           value: your-root-username
          - name: MONGO_INITDB_ROOT_PASSWORD
-           valueFrom:
-             secretKeyRef:
-               name: springappsecrets
-               key: password
+           value: your-root-password
          volumeMounts:
          - name: mongodb-pvc
            mountPath: /data/db
