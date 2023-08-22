@@ -1,3 +1,36 @@
+kind: ConfigMap
+apiVersion: v1
+metadata:
+  name: springappconfigmap
+data:
+  username: springapp
+  password: mongodb@123
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: springappsecrets
+type: Opaque
+stringData:   # We can define multiple key value pairs.
+  password: devdb@123
+---
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: efs-pv
+spec:
+  capacity:
+    storage: 2Gi
+  volumeMode: Filesystem
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: efs-sc
+  nfs:
+    server: fs-080ad5a9f6cce5c10.efs.ap-south-1.amazonaws.com
+    path: "/"
+---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
@@ -54,23 +87,15 @@ spec:
             - name: DEMO_GREETING
               valueFrom:
                 configMapKeyRef:
-                  name: pod2-config-map
-                  key: hello
-            - name: DEMO_FAREWELL
-              valueFrom:
-                configMapKeyRef:
-                  name: pod2-config-map
-                  key: farewell
-            - name: my_username
-              valueFrom:
-                secretKeyRef:
-                  name: pod2-secret
+                  name: springappconfigmap
                   key: username
-            - name: my_password
+            - name: MONGO_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
-                  name: pod2-secret
+                  name: springappsecrets
                   key: password
+            - name: MONGO_DB_HOSTNAME
+              value: mongo
           resources:
             requests:
               cpu: "300m"
@@ -97,6 +122,58 @@ spec:
     name: nginx
   type: ClusterIP # Because nginx controller has load balancer then why we need of svc elb?
 
+---
+# Mongo db pod with volumes(HostPath)
+apiVersion: apps/v1
+kind: ReplicaSet
+metadata:
+  name: mongodbrs
+spec:
+  selector:
+    matchLabels:
+      app: mongodb
+  template:
+     metadata:
+       name: mongodbpod
+       labels:
+         app: mongodb
+     spec:
+       volumes:
+       - name: mongodb-pvc
+         persistentVolumeClaim:
+           claimName: efs-pvc
+       containers:
+       - name: mongodbcontainer
+         image: mongo
+         ports:
+         - containerPort: 27017
+         env:
+         - name: MONGO_INITDB_ROOT_USERNAME
+           valueFrom:
+             configMapKeyRef:
+               name: springappconfigmap
+               key: username
+         - name: MONGO_INITDB_ROOT_PASSWORD
+           valueFrom:
+             secretKeyRef:
+               name: springappsecrets
+               key: password
+         volumeMounts:
+         - name: mongodb-pvc
+           mountPath: /data/db
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongo
+spec:
+  type: ClusterIP
+  selector:
+    app: mongodb
+  ports:
+  - port: 27017
+    targetPort: 27017
 ---
 
 apiVersion: autoscaling/v2beta1
@@ -133,4 +210,3 @@ spec:
                 name: nginx-service
                 port:
                   number: 80
-
