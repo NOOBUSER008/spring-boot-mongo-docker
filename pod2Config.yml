@@ -1,0 +1,19 @@
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pod2-config-map
+data:
+  hello: Hello from the environment
+  farewell: Such a sweet sorrow
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pod2-secret
+type: Opaque
+stringData:
+  username: this is the username
+  password: this is the password
+---
+

@@ -1,0 +1,136 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: efs-pvc
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1.5Gi
+  storageClassName: efs-sc
+
+---
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  labels:
+    name: nginx
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      name: nginx
+  template:
+    metadata:
+      labels:
+        name: nginx
+    spec:
+      containers:
+        - name: nginx-container
+          image: noobuser008/java-mongo:latest
+          ports:
+          - containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8080
+            initialDelaySeconds: 30
+            timeoutSeconds: 1
+            periodSeconds: 15
+          livenessProbe:
+            httpGet:
+              path: /java-web-app
+              port: 8080
+            initialDelaySeconds: 15
+            timeoutSeconds: 1
+            periodSeconds: 15
+          volumeMounts:
+            - name: efs-pvc
+              mountPath: /mnt/efs
+          env:
+            - name: DEMO_GREETING
+              valueFrom:
+                configMapKeyRef:
+                  name: pod2-config-map
+                  key: hello
+            - name: DEMO_FAREWELL
+              valueFrom:
+                configMapKeyRef:
+                  name: pod2-config-map
+                  key: farewell
+            - name: my_username
+              valueFrom:
+                secretKeyRef:
+                  name: pod2-secret
+                  key: username
+            - name: my_password
+              valueFrom:
+                secretKeyRef:
+                  name: pod2-secret
+                  key: password
+          resources:
+            requests:
+              cpu: "300m"
+              memory: "1Gi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+      volumes:
+        - name: efs-pvc
+          persistentVolumeClaim:
+            claimName: efs-pvc
+
+---
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx-service
+spec:
+  ports:
+    - port: 80
+      targetPort: 8080
+  selector:
+    name: nginx
+  type: ClusterIP # Because nginx controller has load balancer then why we need of svc elb?
+
+---
+
+apiVersion: autoscaling/v2beta1
+kind: HorizontalPodAutoscaler
+metadata:
+  name: hpadeploymentautoscaler
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: nginx
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - resource:
+        name: cpu
+        targetAverageUtilization: 50
+      type: Resource
+
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: nginx-ingress
+spec:
+  ingressClassName: nginx
+  rules:
+  - http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: nginx-service
+                port:
+                  number: 80
+
