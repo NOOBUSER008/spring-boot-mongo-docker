@@ -14,114 +14,80 @@ metadata:
 type: Opaque
 stringData:   # We can define multiple key value pairs.
   password: devdb@123
+
 ---
 apiVersion: v1
 kind: PersistentVolume
 metadata:
-  name: efs-pv
+  name: pv-hostpath
 spec:
+  storageClassName: manual
   capacity:
-    storage: 2Gi
-  volumeMode: Filesystem
+    storage: 1Gi
   accessModes:
-    - ReadWriteMany
-  persistentVolumeReclaimPolicy: Retain
-  storageClassName: efs-sc
-  nfs:
-    server: fs-080ad5a9f6cce5c10.efs.ap-south-1.amazonaws.com
-    path: "/"
+  - ReadWriteOnce
+  hostPath:
+    path: "/tmp/mongodata"
 ---
 apiVersion: v1
 kind: PersistentVolumeClaim
 metadata:
-  name: efs-pvc
+  name: pvc-hostpath
 spec:
+  storageClassName: manual
   accessModes:
-    - ReadWriteMany
+  - ReadWriteOnce
   resources:
     requests:
-      storage: 1.5Gi
-  storageClassName: efs-sc
+      storage: 100Mi
 
 ---
-
+## Spring Boot App
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: nginx
-  labels:
-    name: nginx
+  name: springappdeployment
 spec:
   replicas: 2
   selector:
     matchLabels:
-      name: nginx
+      app: springapp
   template:
     metadata:
+      name: springapppod
       labels:
-        name: nginx
+        app: springapp
     spec:
       containers:
-        - name: nginx-container
-          image: noobuser008/java-mongo:latest
-          ports:
-          - containerPort: 8080
-          readinessProbe:
-            httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 30
-            timeoutSeconds: 1
-            periodSeconds: 15
-          livenessProbe:
-            httpGet:
-              path: /
-              port: 8080
-            initialDelaySeconds: 15
-            timeoutSeconds: 1
-            periodSeconds: 15
-          volumeMounts:
-            - name: efs-pvc
-              mountPath: /mnt/efs
-          env:
-            - name: DEMO_GREETING
-              valueFrom:
-                configMapKeyRef:
-                  name: springappconfigmap
-                  key: username
-            - name: MONGO_DB_PASSWORD
-              valueFrom:
-                secretKeyRef:
-                  name: springappsecrets
-                  key: password
-            - name: MONGO_DB_HOSTNAME
-              value: mongo
-          resources:
-            requests:
-              cpu: "300m"
-              memory: "1Gi"
-            limits:
-              cpu: "500m"
-              memory: "1Gi"
-      volumes:
-        - name: efs-pvc
-          persistentVolumeClaim:
-            claimName: efs-pvc
-
+      - name: springappcontainer
+        image: dockerhandson/spring-boot-mongo
+        ports:
+        - containerPort: 8080
+        env:
+        - name: MONGO_DB_USERNAME
+          valueFrom:
+            configMapKeyRef:
+              name: springappconfigmap
+              key: username
+        - name: MONGO_DB_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: springappsecrets
+              key: password
+        - name: MONGO_DB_HOSTNAME
+          value: mongo
 ---
-
 apiVersion: v1
 kind: Service
 metadata:
-  name: nginx-service
+  name: springapp
 spec:
-  ports:
-    - port: 80
-      targetPort: 8080
   selector:
-    name: nginx
-  type: NodePort # Because nginx controller has load balancer then why we need of svc elb?
-
+    app: springapp
+  ports:
+  - port: 80
+    targetPort: 8080
+  type: NodePort
 ---
 # Mongo db pod with volumes(HostPath)
 apiVersion: apps/v1
@@ -141,7 +107,7 @@ spec:
        volumes:
        - name: mongodb-pvc
          persistentVolumeClaim:
-           claimName: efs-pvc
+           claimName: pvc-hostpath 
        containers:
        - name: mongodbcontainer
          image: mongo
@@ -149,13 +115,18 @@ spec:
          - containerPort: 27017
          env:
          - name: MONGO_INITDB_ROOT_USERNAME
-           value: your-root-username
+           valueFrom:
+             configMapKeyRef:
+               name: springappconfigmap
+               key: username
          - name: MONGO_INITDB_ROOT_PASSWORD
-           value: your-root-password
+           valueFrom:
+             secretKeyRef:
+               name: springappsecrets
+               key: password
          volumeMounts:
          - name: mongodb-pvc
            mountPath: /data/db
-
 ---
 apiVersion: v1
 kind: Service
@@ -168,25 +139,6 @@ spec:
   ports:
   - port: 27017
     targetPort: 27017
----
-
-apiVersion: autoscaling/v2beta1
-kind: HorizontalPodAutoscaler
-metadata:
-  name: hpadeploymentautoscaler
-spec:
-  scaleTargetRef:
-    apiVersion: apps/v1
-    kind: Deployment
-    name: nginx
-  minReplicas: 2
-  maxReplicas: 5
-  metrics:
-    - resource:
-        name: cpu
-        targetAverageUtilization: 50
-      type: Resource
-
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -201,6 +153,7 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: nginx-service
+                name: springapp
                 port:
                   number: 80
+    
