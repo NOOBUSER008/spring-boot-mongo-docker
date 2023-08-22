@@ -48,17 +48,17 @@ spec:
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: springappdeployment
+  name: nginx
 spec:
   replicas: 2
   selector:
     matchLabels:
-      app: springapp
+      app: nginx
   template:
     metadata:
-      name: springapppod
+      name: nginxpod
       labels:
-        app: springapp
+        app: nginx
     spec:
       containers:
       - name: springappcontainer
@@ -82,10 +82,10 @@ spec:
 apiVersion: v1
 kind: Service
 metadata:
-  name: springapp
+  name: nginx-service
 spec:
   selector:
-    app: springapp
+    app: nginx
   ports:
   - port: 80
     targetPort: 8080
