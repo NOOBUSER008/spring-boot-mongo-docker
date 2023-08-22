@@ -120,7 +120,7 @@ spec:
       targetPort: 8080
   selector:
     name: nginx
-  type: ClusterIP # Because nginx controller has load balancer then why we need of svc elb?
+  type: NodePort # Because nginx controller has load balancer then why we need of svc elb?
 
 ---
 # Mongo db pod with volumes(HostPath)
@@ -207,6 +207,6 @@ spec:
             pathType: Prefix
             backend:
               service:
-                name: nginx-service
+                name: mongo
                 port:
                   number: 80
