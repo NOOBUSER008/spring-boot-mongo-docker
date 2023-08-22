@@ -197,7 +197,7 @@ spec:
   rules:
   - http:
         paths:
-          - path: /save
+          - path: /
             pathType: Prefix
             backend:
               service:
