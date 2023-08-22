@@ -42,7 +42,7 @@ spec:
             periodSeconds: 15
           livenessProbe:
             httpGet:
-              path: /java-web-app
+              path: /
               port: 8080
             initialDelaySeconds: 15
             timeoutSeconds: 1
